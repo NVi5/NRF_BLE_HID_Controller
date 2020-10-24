@@ -111,8 +111,8 @@
 #define BATTERY_LEVEL_INCREMENT         1                                          /**< Increment between each simulated battery level measurement. */
 
 #define PNP_ID_VENDOR_ID_SOURCE         0x02                                       /**< Vendor ID Source. */
-#define PNP_ID_VENDOR_ID                0x1915                                     /**< Vendor ID. */
-#define PNP_ID_PRODUCT_ID               0xEEEE                                     /**< Product ID. */
+#define PNP_ID_VENDOR_ID                0xDEAD                                     /**< Vendor ID. */
+#define PNP_ID_PRODUCT_ID               0xCAFE                                     /**< Product ID. */
 #define PNP_ID_PRODUCT_VERSION          0x0001                                     /**< Product Version. */
 
 /*lint -emacro(524, MIN_CONN_INTERVAL) // Loss of precision */
