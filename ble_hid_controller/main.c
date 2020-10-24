@@ -45,7 +45,7 @@
  * @ingroup ble_sdk_app_hids_mouse
  * @brief HID Mouse Sample Application main file.
  *
- * This file contains is the source code for a sample application using the HID, Battery and Device
+ * This file contains is the source code for a sample application using the HID and Device
  * Information Service for implementing a simple mouse functionality. This application uses the
  * @ref app_scheduler.
  *
@@ -66,11 +66,9 @@
 #include "ble_srv_common.h"
 #include "ble_advdata.h"
 #include "ble_hids.h"
-#include "ble_bas.h"
 #include "ble_dis.h"
 #include "ble_conn_params.h"
 #include "bsp.h"
-#include "sensorsim.h"
 #include "bsp_btn_ble.h"
 #include "app_scheduler.h"
 #include "softdevice_handler_appsh.h"
@@ -104,11 +102,6 @@
 
 #define APP_TIMER_PRESCALER             0                                          /**< Value of the RTC1 PRESCALER register. */
 #define APP_TIMER_OP_QUEUE_SIZE         4                                          /**< Size of timer operation queues. */
-
-#define BATTERY_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(2000, APP_TIMER_PRESCALER) /**< Battery level measurement interval (ticks). */
-#define MIN_BATTERY_LEVEL               81                                         /**< Minimum simulated battery level. */
-#define MAX_BATTERY_LEVEL               100                                        /**< Maximum simulated battery level. */
-#define BATTERY_LEVEL_INCREMENT         1                                          /**< Increment between each simulated battery level measurement. */
 
 #define PNP_ID_VENDOR_ID_SOURCE         0x02                                       /**< Vendor ID Source. */
 #define PNP_ID_VENDOR_ID                0xDEAD                                     /**< Vendor ID. */
@@ -167,14 +160,8 @@
 #define APP_ADV_SLOW_TIMEOUT            180                                                       /**< The duration of the slow advertising period (in seconds). */
 
 static ble_hids_t m_hids;                                                                         /**< Structure used to identify the HID service. */
-static ble_bas_t  m_bas;                                                                          /**< Structure used to identify the battery service. */
 static bool       m_in_boot_mode = false;                                                         /**< Current protocol mode. */
 static uint16_t   m_conn_handle  = BLE_CONN_HANDLE_INVALID;                                       /**< Handle of the current connection. */
-
-static sensorsim_cfg_t   m_battery_sim_cfg;                                                       /**< Battery Level sensor simulator configuration. */
-static sensorsim_state_t m_battery_sim_state;                                                     /**< Battery Level sensor simulator state. */
-
-APP_TIMER_DEF(m_battery_timer_id);                                                                /**< Battery timer. */
 
 static pm_peer_id_t m_peer_id;                                                                    /**< Device reference handle to the current bonded central. */
 
@@ -400,57 +387,14 @@ static void ble_advertising_error_handler(uint32_t nrf_error)
 }
 
 
-/**@brief Function for performing a battery measurement, and update the Battery Level characteristic in the Battery Service.
- */
-static void battery_level_update(void)
-{
-    uint32_t err_code;
-    uint8_t  battery_level;
-
-    battery_level = (uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
-
-    err_code = ble_bas_battery_level_update(&m_bas, battery_level);
-    if ((err_code != NRF_SUCCESS) &&
-        (err_code != NRF_ERROR_INVALID_STATE) &&
-        (err_code != BLE_ERROR_NO_TX_PACKETS) &&
-        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
-       )
-    {
-        APP_ERROR_HANDLER(err_code);
-    }
-}
-
-
-/**@brief Function for handling the Battery measurement timer timeout.
- *
- * @details This function will be called each time the battery level measurement timer expires.
- *
- * @param[in]   p_context   Pointer used for passing some arbitrary information (context) from the
- *                          app_start_timer() call to the timeout handler.
- */
-static void battery_level_meas_timeout_handler(void * p_context)
-{
-    UNUSED_PARAMETER(p_context);
-    battery_level_update();
-}
-
-
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module.
  */
 static void timers_init(void)
 {
-    uint32_t err_code;
-
     // Initialize timer module, making it use the scheduler.
     APP_TIMER_APPSH_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, true);
-
-    // Create battery timer.
-    err_code = app_timer_create(&m_battery_timer_id,
-                                APP_TIMER_MODE_REPEATED,
-                                battery_level_meas_timeout_handler);
-    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -509,31 +453,6 @@ static void dis_init(void)
     BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&dis_init_obj.dis_attr_md.write_perm);
 
     err_code = ble_dis_init(&dis_init_obj);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for initializing Battery Service.
- */
-static void bas_init(void)
-{
-    uint32_t       err_code;
-    ble_bas_init_t bas_init_obj;
-
-    memset(&bas_init_obj, 0, sizeof(bas_init_obj));
-
-    bas_init_obj.evt_handler          = NULL;
-    bas_init_obj.support_notification = true;
-    bas_init_obj.p_report_ref         = NULL;
-    bas_init_obj.initial_batt_level   = 100;
-
-    BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&bas_init_obj.battery_level_char_attr_md.cccd_write_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&bas_init_obj.battery_level_char_attr_md.read_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&bas_init_obj.battery_level_char_attr_md.write_perm);
-
-    BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&bas_init_obj.battery_level_report_read_perm);
-
-    err_code = ble_bas_init(&m_bas, &bas_init_obj);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -706,21 +625,7 @@ static void hids_init(void)
 static void services_init(void)
 {
     dis_init();
-    bas_init();
     hids_init();
-}
-
-
-/**@brief Function for initializing the battery sensor simulator.
- */
-static void sensor_simulator_init(void)
-{
-    m_battery_sim_cfg.min          = MIN_BATTERY_LEVEL;
-    m_battery_sim_cfg.max          = MAX_BATTERY_LEVEL;
-    m_battery_sim_cfg.incr         = BATTERY_LEVEL_INCREMENT;
-    m_battery_sim_cfg.start_at_max = true;
-
-    sensorsim_init(&m_battery_sim_state, &m_battery_sim_cfg);
 }
 
 
@@ -761,10 +666,7 @@ static void conn_params_init(void)
  */
 static void timers_start(void)
 {
-    uint32_t err_code;
 
-    err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
-    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -1040,7 +942,6 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     ble_advertising_on_ble_evt(p_ble_evt);
     ble_conn_params_on_ble_evt(p_ble_evt);
     ble_hids_on_ble_evt(&m_hids, p_ble_evt);
-    ble_bas_on_ble_evt(&m_bas, p_ble_evt);
 }
 
 
@@ -1354,7 +1255,6 @@ int main(void)
     gap_params_init();
     advertising_init();
     services_init();
-    sensor_simulator_init();
     conn_params_init();
 
     // Start execution.
