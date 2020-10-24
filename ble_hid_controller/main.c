@@ -86,7 +86,7 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-#if BUTTONS_NUMBER < 4
+#if BUTTONS_NUMBER < 2
 #error "Not enough resources on board to run example"
 #endif
 
@@ -1290,21 +1290,7 @@ static void bsp_event_handler(bsp_event_t event)
         case BSP_EVENT_KEY_1:
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
-                mouse_movement_send(0, -MOVEMENT_SPEED);
-            }
-            break;
-
-        case BSP_EVENT_KEY_2:
-            if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
-            {
                 mouse_movement_send(MOVEMENT_SPEED, 0);
-            }
-            break;
-
-        case BSP_EVENT_KEY_3:
-            if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
-            {
-                mouse_movement_send(0, MOVEMENT_SPEED);
             }
             break;
 
