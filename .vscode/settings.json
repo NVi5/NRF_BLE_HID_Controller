@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "nordic_common.h": "c",
+        "stdint.h": "c"
+    }
+}
