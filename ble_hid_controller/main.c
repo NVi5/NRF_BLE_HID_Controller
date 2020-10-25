@@ -177,6 +177,7 @@ static ble_uuid_t                       m_scan_rsp_uuids[] = {{BLE_UUID_NUS_SERV
 static pm_peer_id_t                     m_whitelist_peers[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];  /**< List of peers currently in the whitelist. */
 static uint32_t                         m_whitelist_peer_cnt;                                 /**< Number of peers currently in the whitelist. */
 static bool                             m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
+static ble_gap_addr_t                   mac_address = {.addr_type = BLE_GAP_ADDR_TYPE_PUBLIC, .addr = {0x89, 0x41, 0x28, 0x43, 0x3C, 0x94}};
 
 static int16_t                          x_axis_pos;                                           /**< Mouse position*/
 
@@ -438,8 +439,7 @@ static void gap_params_init(void)
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
 
-    ble_gap_addr_t addr = {.addr_type = BLE_GAP_ADDR_TYPE_PUBLIC, .addr = {0x89, 0x41, 0x28, 0x43, 0x3C, 0x94}};
-    err_code = sd_ble_gap_address_set(BLE_GAP_ADDR_CYCLE_MODE_NONE, &addr);
+    err_code = sd_ble_gap_address_set(BLE_GAP_ADDR_CYCLE_MODE_NONE, &mac_address);
     APP_ERROR_CHECK(err_code);
 }
 
