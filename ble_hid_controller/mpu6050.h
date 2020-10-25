@@ -10,6 +10,8 @@
 
 // Init MPU6050
 void Init_mpu6050(void);
+// Get current values from MPU6050
+void Get_mpu6050(int16_t *x_axis, int16_t *y_axis);
 // Read from MPU6050
 void Read_mpu6050(void);
 

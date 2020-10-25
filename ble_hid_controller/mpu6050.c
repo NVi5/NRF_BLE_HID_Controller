@@ -4,6 +4,14 @@
 #include <string.h>
 #include "main.h"
 
+typedef struct
+{
+    int16_t x_axis;
+    int16_t y_axis;
+} axis_t;
+
+static axis_t current_pos;
+
 static char string_buffer[30];
 static uint8_t m_buffer[MPU6050_READ_SIZE];
 
@@ -25,8 +33,8 @@ void read_mpu6050_cb(ret_code_t result, void * p_user_data)
     // float AngleX = atanf(AccelX/hypotf(AccelY,AccelZ))*57.29578;
     // float AngleY = atanf(AccelY/hypotf(AccelX,AccelZ))*57.29578;
 
-    float Pitch_f = atanf(AccelX/hypotf(AccelY,AccelZ))*80;
-    float Roll_f = atanf(AccelY/hypotf(AccelX,AccelZ))*80;
+    float Pitch_f = atanf(AccelX/hypotf(AccelY,AccelZ))*150;
+    float Roll_f = atanf(AccelY/hypotf(AccelX,AccelZ))*150;
     int16_t Pitch = (int16_t)Pitch_f;
     int16_t Roll = (int16_t)Roll_f;
 
@@ -40,6 +48,16 @@ void read_mpu6050_cb(ret_code_t result, void * p_user_data)
     // App_uart_send_string(strlen(string_buffer), string_buffer);
     sprintf(string_buffer, "Pitch: %d\tRoll: %d",Pitch, Roll);
     App_uart_send_string(strlen(string_buffer), string_buffer);
+
+    current_pos.x_axis = Roll;
+    current_pos.y_axis = Pitch;
+}
+
+// Get current values from MPU6050
+void Get_mpu6050(int16_t *x_axis, int16_t *y_axis)
+{
+    *x_axis = current_pos.x_axis;
+    *y_axis = current_pos.y_axis;
 }
 
 void Read_mpu6050(void)

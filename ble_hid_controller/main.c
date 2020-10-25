@@ -142,7 +142,6 @@
 #define INPUT_REP_PAD_INDEX             0                                           /**< Index of Pad Input Report containing button data. */
 #define INPUT_REP_REF_PAD_ID            1                                           /**< Id of reference to Pad Input Report containing button data. */
 
-
 #define BASE_USB_HID_SPEC_VERSION       0x0101                                      /**< Version number of base USB HID Specification implemented by this application. */
 
 #define SCHED_MAX_EVENT_DATA_SIZE       MAX(APP_TIMER_SCHED_EVT_SIZE, \
@@ -166,6 +165,8 @@
 #define UART_TX_BUF_SIZE                256                                         /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE                256                                         /**< UART RX buffer size. */
 
+#define MPU6050_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(33, APP_TIMER_PRESCALER)  /**< MPU6050 level measurement interval (ticks). */
+
 static ble_nus_t                        m_nus;                                      /**< Structure to identify the Nordic UART Service. */
 static ble_hids_t                       m_hids;                                     /**< Structure used to identify the HID service. */
 static bool                             m_in_boot_mode = false;                     /**< Current protocol mode. */
@@ -180,12 +181,11 @@ static pm_peer_id_t                     m_whitelist_peers[BLE_GAP_WHITELIST_ADDR
 static uint32_t                         m_whitelist_peer_cnt;                                 /**< Number of peers currently in the whitelist. */
 static bool                             m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
 static ble_gap_addr_t                   mac_address = {.addr_type = BLE_GAP_ADDR_TYPE_PUBLIC, .addr = {0x89, 0x41, 0x28, 0x43, 0x3C, 0x94}};
-
+APP_TIMER_DEF(m_mpu6050_timer_id);                                                  /**< MPU6050 timer. */                    
 static app_twi_t                        m_app_twi = APP_TWI_INSTANCE(0);            /**< TWI instance */
 
-static int16_t                          x_axis_pos;                                           /**< Mouse position*/
-
 static void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
+static void hid_update_send(int8_t x_axis, int8_t y_axis);
 
 #if defined( __GNUC__ ) && (__LINT__ == 0)
     // This is required if one wants to use floating-point values in 'printf'
@@ -406,6 +406,29 @@ static void ble_advertising_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
+/**@brief Function for handling the MPU6050 timer timeout.
+ *
+ * @details This function will be called each time the MPU6050 timer expires.
+ *
+ * @param[in]   p_context   Pointer used for passing some arbitrary information (context) from the
+ *                          app_start_timer() call to the timeout handler.
+ */
+static void mpu_6050_timer_handler(void * p_context)
+{
+    UNUSED_PARAMETER(p_context);
+    int16_t x_axis;
+    int16_t y_axis;
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
+    {
+        Read_mpu6050();
+        Get_mpu6050(&x_axis, &y_axis);
+        x_axis = MAX(x_axis, -127);
+        x_axis = MIN(x_axis, 127);
+        y_axis = MAX(y_axis, -127);
+        y_axis = MIN(y_axis, 127);
+        hid_update_send((int8_t)x_axis, (int8_t)y_axis);
+    }
+}
 
 /**@brief Function for the Timer initialization.
  *
@@ -415,6 +438,12 @@ static void timers_init(void)
 {
     // Initialize timer module, making it use the scheduler.
     APP_TIMER_APPSH_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, true);
+
+    // Create MPU6050 timer.
+    uint32_t err_code = app_timer_create(&m_mpu6050_timer_id,
+                                APP_TIMER_MODE_REPEATED,
+                                mpu_6050_timer_handler);
+    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -652,12 +681,12 @@ static void conn_params_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
 /**@brief Function for starting timers.
  */
 static void timers_start(void)
 {
-
+    uint32_t err_code = app_timer_start(m_mpu6050_timer_id, MPU6050_LEVEL_MEAS_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -1095,7 +1124,7 @@ static void scheduler_init(void)
  * @param[in]   x_axis
  * @param[in]   y_axis
  */
-static void axis_update_send(int8_t x_axis, int8_t y_axis)
+static void hid_update_send(int8_t x_axis, int8_t y_axis)
 {
     if (!m_in_boot_mode)
     {
@@ -1155,23 +1184,21 @@ static void bsp_event_handler(bsp_event_t event)
             }
             break;
 
-        case BSP_EVENT_KEY_0:
-            if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
-            {
-                x_axis_pos = MAX(x_axis_pos - MOVEMENT_SPEED, -127);
-                axis_update_send(x_axis_pos, 0);
-            }
-            Read_mpu6050();
-            break;
+        // case BSP_EVENT_KEY_0:
+        //     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
+        //     {
+        //         x_axis_pos = MAX(x_axis_pos - MOVEMENT_SPEED, -127);
+        //         hid_update_send(x_axis_pos, 0);
+        //     }
+        //     break;
 
-        case BSP_EVENT_KEY_1:
-            if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
-            {
-                x_axis_pos = MIN(x_axis_pos + MOVEMENT_SPEED, 127);
-                axis_update_send(x_axis_pos, 0);
-            }
-            Read_mpu6050();
-            break;
+        // case BSP_EVENT_KEY_1:
+        //     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
+        //     {
+        //         x_axis_pos = MIN(x_axis_pos + MOVEMENT_SPEED, 127);
+        //         hid_update_send(x_axis_pos, 0);
+        //     }
+        //     break;
 
         default:
             break;
