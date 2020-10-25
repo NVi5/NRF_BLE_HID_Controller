@@ -79,6 +79,8 @@
 #include "fds.h"
 #include "fstorage.h"
 #include "ble_conn_state.h"
+#include "ble_nus.h"
+#include "app_uart.h"
 
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
@@ -96,6 +98,11 @@
 
 #define CENTRAL_LINK_COUNT              0                                          /**< Number of central links used by the application. When changing this number remember to adjust the RAM settings*/
 #define PERIPHERAL_LINK_COUNT           1                                          /**< Number of peripheral links used by the application. When changing this number remember to adjust the RAM settings*/
+
+#define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
+
+#define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout (in units of seconds). */
 
 #define DEVICE_NAME                     "NFS_Controller"                           /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME               "MTM"                                      /**< Manufacturer. Will be passed to Device Information Service. */
@@ -137,36 +144,41 @@
 #define BASE_USB_HID_SPEC_VERSION       0x0101                                      /**< Version number of base USB HID Specification implemented by this application. */
 
 #define SCHED_MAX_EVENT_DATA_SIZE       MAX(APP_TIMER_SCHED_EVT_SIZE, \
-                                            BLE_STACK_HANDLER_SCHED_EVT_SIZE)                     /**< Maximum size of scheduler events. */
+                                            BLE_STACK_HANDLER_SCHED_EVT_SIZE)       /**< Maximum size of scheduler events. */
 #ifdef SVCALL_AS_NORMAL_FUNCTION
 #define SCHED_QUEUE_SIZE                 20                                         /**< Maximum number of events in the scheduler queue. More is needed in case of Serialization. */
 #else
-#define SCHED_QUEUE_SIZE                10                                                        /**< Maximum number of events in the scheduler queue. */
+#define SCHED_QUEUE_SIZE                10                                          /**< Maximum number of events in the scheduler queue. */
 #endif
 
-#define DEAD_BEEF                       0xDEADBEEF                                                /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
+#define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
-#define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2                      /**< Reply when unsupported features are requested. */
+#define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
 
-#define APP_ADV_FAST_INTERVAL           0x0028                                                    /**< Fast advertising interval (in units of 0.625 ms. This value corresponds to 25 ms.). */
-#define APP_ADV_SLOW_INTERVAL           0x0C80                                                    /**< Slow advertising interval (in units of 0.625 ms. This value corrsponds to 2 seconds). */
+#define APP_ADV_FAST_INTERVAL           0x0028                                      /**< Fast advertising interval (in units of 0.625 ms. This value corresponds to 25 ms.). */
+#define APP_ADV_SLOW_INTERVAL           0x0C80                                      /**< Slow advertising interval (in units of 0.625 ms. This value corrsponds to 2 seconds). */
 
-#define APP_ADV_FAST_TIMEOUT            30                                                        /**< The duration of the fast advertising period (in seconds). */
-#define APP_ADV_SLOW_TIMEOUT            180                                                       /**< The duration of the slow advertising period (in seconds). */
+#define APP_ADV_FAST_TIMEOUT            30                                          /**< The duration of the fast advertising period (in seconds). */
+#define APP_ADV_SLOW_TIMEOUT            180                                         /**< The duration of the slow advertising period (in seconds). */
 
-static ble_hids_t m_hids;                                                                         /**< Structure used to identify the HID service. */
-static bool       m_in_boot_mode = false;                                                         /**< Current protocol mode. */
-static uint16_t   m_conn_handle  = BLE_CONN_HANDLE_INVALID;                                       /**< Handle of the current connection. */
+#define UART_TX_BUF_SIZE                256                                         /**< UART TX buffer size. */
+#define UART_RX_BUF_SIZE                256                                         /**< UART RX buffer size. */
 
-static pm_peer_id_t m_peer_id;                                                                    /**< Device reference handle to the current bonded central. */
+static ble_nus_t                        m_nus;                                      /**< Structure to identify the Nordic UART Service. */
+static ble_hids_t                       m_hids;                                     /**< Structure used to identify the HID service. */
+static bool                             m_in_boot_mode = false;                     /**< Current protocol mode. */
+static uint16_t                         m_conn_handle  = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
 
-static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_HUMAN_INTERFACE_DEVICE_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
+static pm_peer_id_t                     m_peer_id;                                  /**< Device reference handle to the current bonded central. */
 
-static pm_peer_id_t   m_whitelist_peers[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];  /**< List of peers currently in the whitelist. */
-static uint32_t       m_whitelist_peer_cnt;                                 /**< Number of peers currently in the whitelist. */
-static bool           m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
+static ble_uuid_t                       m_adv_uuids[] = {{BLE_UUID_HUMAN_INTERFACE_DEVICE_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
+static ble_uuid_t                       m_scan_rsp_uuids[] = {{BLE_UUID_NUS_SERVICE, BLE_UUID_TYPE_VENDOR_BEGIN}}; /**< Universally unique service identifiers. */
 
-static int16_t        x_axis_pos;                                           /**< Mouse position*/
+static pm_peer_id_t                     m_whitelist_peers[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];  /**< List of peers currently in the whitelist. */
+static uint32_t                         m_whitelist_peer_cnt;                                 /**< Number of peers currently in the whitelist. */
+static bool                             m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
+
+static int16_t                          x_axis_pos;                                           /**< Mouse position*/
 
 static void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
 
@@ -431,6 +443,42 @@ static void gap_params_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+/**@brief Function for handling the data from the Nordic UART Service.
+ *
+ * @details This function will process the data received from the Nordic UART BLE Service and send
+ *          it to the UART module.
+ *
+ * @param[in] p_nus    Nordic UART Service structure.
+ * @param[in] p_data   Data to be send to UART module.
+ * @param[in] length   Length of the data.
+ */
+/**@snippet [Handling the data received over BLE] */
+static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
+{
+    for (uint32_t i = 0; i < length; i++)
+    {
+        while (app_uart_put(p_data[i]) != NRF_SUCCESS);
+    }
+    while (app_uart_put('\r') != NRF_SUCCESS);
+    while (app_uart_put('\n') != NRF_SUCCESS);
+}
+/**@snippet [Handling the data received over BLE] */
+
+
+/**@brief Function for initializing nus service that will be used by the application.
+ */
+static void nus_init(void)
+{
+    uint32_t       err_code;
+    ble_nus_init_t nus_init;
+
+    memset(&nus_init, 0, sizeof(nus_init));
+
+    nus_init.data_handler = nus_data_handler;
+
+    err_code = ble_nus_init(&m_nus, &nus_init);
+    APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Function for initializing Device Information Service.
  */
@@ -542,8 +590,30 @@ static void services_init(void)
 {
     dis_init();
     hids_init();
+    nus_init();
 }
 
+/**@brief Function for handling an event from the Connection Parameters Module.
+ *
+ * @details This function will be called for all events in the Connection Parameters Module
+ *          which are passed to the application.
+ *
+ * @note All this function does is to disconnect. This could have been done by simply setting
+ *       the disconnect_on_fail config parameter, but instead we use the event handler
+ *       mechanism to demonstrate its use.
+ *
+ * @param[in] p_evt  Event received from the Connection Parameters Module.
+ */
+static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
+{
+    uint32_t err_code;
+
+    if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
+    {
+        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+        APP_ERROR_CHECK(err_code);
+    }
+}
 
 /**@brief Function for handling a Connection Parameters error.
  *
@@ -570,7 +640,7 @@ static void conn_params_init(void)
     cp_init.max_conn_params_update_count   = MAX_CONN_PARAM_UPDATE_COUNT;
     cp_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
     cp_init.disconnect_on_fail             = false;
-    cp_init.evt_handler                    = NULL;
+    cp_init.evt_handler                    = on_conn_params_evt;
     cp_init.error_handler                  = conn_params_error_handler;
 
     err_code = ble_conn_params_init(&cp_init);
@@ -852,6 +922,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     /** The Connection state module has to be fed BLE events in order to function correctly
      * Remember to call ble_conn_state_on_ble_evt before calling any ble_conns_state_* functions. */
     ble_conn_state_on_ble_evt(p_ble_evt);
+    ble_nus_on_ble_evt(&m_nus, p_ble_evt);
     pm_on_ble_evt(p_ble_evt);
     bsp_btn_ble_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
@@ -968,19 +1039,21 @@ static void peer_manager_init(bool erase_bonds)
 static void advertising_init(void)
 {
     uint32_t               err_code;
-    uint8_t                adv_flags;
     ble_advdata_t          advdata;
+    ble_advdata_t          scanrsp;
     ble_adv_modes_config_t options;
 
     // Build and set advertising data
     memset(&advdata, 0, sizeof(advdata));
-
-    adv_flags                       = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
     advdata.name_type               = BLE_ADVDATA_FULL_NAME;
     advdata.include_appearance      = true;
-    advdata.flags                   = adv_flags;
+    advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
     advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     advdata.uuids_complete.p_uuids  = m_adv_uuids;
+    
+    memset(&scanrsp, 0, sizeof(scanrsp));
+    scanrsp.uuids_complete.uuid_cnt = sizeof(m_scan_rsp_uuids) / sizeof(m_scan_rsp_uuids[0]);
+    scanrsp.uuids_complete.p_uuids  = m_scan_rsp_uuids;
 
     memset(&options, 0, sizeof(options));
     options.ble_adv_whitelist_enabled      = true;
@@ -996,7 +1069,7 @@ static void advertising_init(void)
     options.ble_adv_slow_timeout           = APP_ADV_SLOW_TIMEOUT;
 
     err_code = ble_advertising_init(&advdata,
-                                    NULL,
+                                    &scanrsp,
                                     &options,
                                     on_adv_evt,
                                     ble_advertising_error_handler);
@@ -1098,6 +1171,78 @@ static void bsp_event_handler(bsp_event_t event)
     }
 }
 
+/**@brief   Function for handling app_uart events.
+ *
+ * @details This function will receive a single character from the app_uart module and append it to
+ *          a string. The string will be be sent over BLE when the last character received was a
+ *          'new line' i.e '\r\n' (hex 0x0D) or if the string has reached a length of
+ *          @ref NUS_MAX_DATA_LENGTH.
+ */
+/**@snippet [Handling the data received over UART] */
+void uart_event_handle(app_uart_evt_t * p_event)
+{
+    static uint8_t data_array[BLE_NUS_MAX_DATA_LEN];
+    static uint8_t index = 0;
+    uint32_t       err_code;
+
+    switch (p_event->evt_type)
+    {
+        case APP_UART_DATA_READY:
+            UNUSED_VARIABLE(app_uart_get(&data_array[index]));
+            index++;
+
+            if ((data_array[index - 1] == '\n') || (index >= (BLE_NUS_MAX_DATA_LEN)))
+            {
+                err_code = ble_nus_string_send(&m_nus, data_array, index);
+                if (err_code != NRF_ERROR_INVALID_STATE)
+                {
+                    APP_ERROR_CHECK(err_code);
+                }
+
+                index = 0;
+            }
+            break;
+
+        case APP_UART_COMMUNICATION_ERROR:
+            APP_ERROR_HANDLER(p_event->data.error_communication);
+            break;
+
+        case APP_UART_FIFO_ERROR:
+            APP_ERROR_HANDLER(p_event->data.error_code);
+            break;
+
+        default:
+            break;
+    }
+}
+/**@snippet [Handling the data received over UART] */
+
+/**@brief  Function for initializing the UART module.
+ */
+/**@snippet [UART Initialization] */
+static void uart_init(void)
+{
+    uint32_t                     err_code;
+    const app_uart_comm_params_t comm_params =
+    {
+        RX_PIN_NUMBER,
+        TX_PIN_NUMBER,
+        RTS_PIN_NUMBER,
+        CTS_PIN_NUMBER,
+        APP_UART_FLOW_CONTROL_DISABLED,
+        false,
+        UART_BAUDRATE_BAUDRATE_Baud115200
+    };
+
+    APP_UART_FIFO_INIT( &comm_params,
+                       UART_RX_BUF_SIZE,
+                       UART_TX_BUF_SIZE,
+                       uart_event_handle,
+                       APP_IRQ_PRIORITY_LOWEST,
+                       err_code);
+    APP_ERROR_CHECK(err_code);
+}
+/**@snippet [UART Initialization] */
 
 /**@brief Function for initializing buttons and leds.
  *
@@ -1140,8 +1285,8 @@ int main(void)
     // Initialize.
     err_code = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(err_code);
-
     timers_init();
+    uart_init();
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     scheduler_init();
@@ -1151,8 +1296,8 @@ int main(void)
         NRF_LOG_INFO("Bonds erased!\r\n");
     }
     gap_params_init();
-    advertising_init();
     services_init();
+    advertising_init();
     conn_params_init();
 
     // Start execution.
