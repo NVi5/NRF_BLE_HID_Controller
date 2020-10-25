@@ -52,9 +52,9 @@
  * Also it would accept pairing requests from any peer device. This implementation of the
  * application will not know whether a connected central is a known device or not.
  */
-
 #include <stdint.h>
 #include <string.h>
+#include "main.h"
 #include "nordic_common.h"
 #include "nrf.h"
 #include "nrf_soc.h"
@@ -81,6 +81,8 @@
 #include "ble_conn_state.h"
 #include "ble_nus.h"
 #include "app_uart.h"
+#include "nrf_twi.h"
+#include "mpu6050.h"
 
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
@@ -93,7 +95,7 @@
 #if (NRF_SD_BLE_API_VERSION == 3)
 #define NRF_BLE_MAX_MTU_SIZE            GATT_MTU_SIZE_DEFAULT                      /**< MTU size used in the softdevice enabling and to reply to a BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST event. */
 #endif
-
+#define MAX_PENDING_TRANSACTIONS        5
 #define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
 #define CENTRAL_LINK_COUNT              0                                          /**< Number of central links used by the application. When changing this number remember to adjust the RAM settings*/
@@ -179,10 +181,18 @@ static uint32_t                         m_whitelist_peer_cnt;                   
 static bool                             m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
 static ble_gap_addr_t                   mac_address = {.addr_type = BLE_GAP_ADDR_TYPE_PUBLIC, .addr = {0x89, 0x41, 0x28, 0x43, 0x3C, 0x94}};
 
+static app_twi_t                        m_app_twi = APP_TWI_INSTANCE(0);            /**< TWI instance */
+
 static int16_t                          x_axis_pos;                                           /**< Mouse position*/
 
 static void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
 
+#if defined( __GNUC__ ) && (__LINT__ == 0)
+    // This is required if one wants to use floating-point values in 'printf'
+    // (by default this feature is not linked together with newlib-nano).
+    // Please note, however, that this adds about 13 kB code footprint...
+    __ASM(".global _printf_float");
+#endif
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -455,12 +465,7 @@ static void gap_params_init(void)
 /**@snippet [Handling the data received over BLE] */
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
-    for (uint32_t i = 0; i < length; i++)
-    {
-        while (app_uart_put(p_data[i]) != NRF_SUCCESS);
-    }
-    while (app_uart_put('\r') != NRF_SUCCESS);
-    while (app_uart_put('\n') != NRF_SUCCESS);
+    App_uart_send_string(length, (char *)p_data);
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -1156,6 +1161,7 @@ static void bsp_event_handler(bsp_event_t event)
                 x_axis_pos = MAX(x_axis_pos - MOVEMENT_SPEED, -127);
                 axis_update_send(x_axis_pos, 0);
             }
+            Read_mpu6050();
             break;
 
         case BSP_EVENT_KEY_1:
@@ -1164,6 +1170,7 @@ static void bsp_event_handler(bsp_event_t event)
                 x_axis_pos = MIN(x_axis_pos + MOVEMENT_SPEED, 127);
                 axis_update_send(x_axis_pos, 0);
             }
+            Read_mpu6050();
             break;
 
         default:
@@ -1215,6 +1222,16 @@ void uart_event_handle(app_uart_evt_t * p_event)
             break;
     }
 }
+
+void App_uart_send_string(uint16_t length, char *p_data)
+{
+    for (uint32_t i = 0; i < length; i++)
+    {
+        while (app_uart_put(p_data[i]) != NRF_SUCCESS);
+    }
+    while (app_uart_put('\r') != NRF_SUCCESS);
+    while (app_uart_put('\n') != NRF_SUCCESS);
+}
 /**@snippet [Handling the data received over UART] */
 
 /**@brief  Function for initializing the UART module.
@@ -1264,6 +1281,29 @@ static void buttons_leds_init(bool * p_erase_bonds)
     *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
 }
 
+// Send TWI transaction
+void Twi_send(const app_twi_transaction_t *transaction)
+{
+    APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, transaction));
+}
+
+// TWI (with transaction manager) initialization.
+static void twi_config(void)
+{
+    uint32_t err_code;
+
+    nrf_drv_twi_config_t const config = {
+       .scl                = SCL_PIN,
+       .sda                = SDA_PIN,
+       .frequency          = NRF_TWI_FREQ_100K,
+       .interrupt_priority = APP_IRQ_PRIORITY_LOWEST,
+       .clear_bus_init     = false
+    };
+
+    APP_TWI_INIT(&m_app_twi, &config, MAX_PENDING_TRANSACTIONS, err_code);
+    APP_ERROR_CHECK(err_code);
+}
+
 
 /**@brief Function for the Power manager.
  */
@@ -1300,10 +1340,13 @@ int main(void)
     advertising_init();
     conn_params_init();
 
+    twi_config();
+
     // Start execution.
     NRF_LOG_INFO("HID Start!\r\n");
     timers_start();
     advertising_start();
+    Init_mpu6050();
 
     // Enter main loop.
     for (;;)

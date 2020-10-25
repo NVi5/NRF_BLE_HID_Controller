@@ -16,6 +16,8 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/fifo/app_fifo.c \
   $(SDK_ROOT)/components/libraries/uart/app_uart_fifo.c \
   $(SDK_ROOT)/components/libraries/uart/retarget.c \
+  $(SDK_ROOT)/components/libraries/twi/app_twi.c \
+  $(SDK_ROOT)/components/drivers_nrf/twi_master/nrf_drv_twi.c \
   $(SDK_ROOT)/components/libraries/log/src/nrf_log_backend_serial.c \
   $(SDK_ROOT)/components/libraries/log/src/nrf_log_frontend.c \
   $(SDK_ROOT)/components/libraries/button/app_button.c \
@@ -42,6 +44,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/bsp/bsp_btn_ble.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp_nfc.c \
   $(PROJ_DIR)/main.c \
+  $(PROJ_DIR)/mpu6050.c \
   $(SDK_ROOT)/external/segger_rtt/RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
