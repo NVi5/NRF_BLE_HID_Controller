@@ -12,7 +12,7 @@ typedef struct
 
 static axis_t current_pos;
 
-static char string_buffer[30];
+// static char string_buffer[30];
 static uint8_t m_buffer[MPU6050_READ_SIZE];
 
 void read_mpu6050_cb(ret_code_t result, void * p_user_data)
@@ -35,7 +35,7 @@ void read_mpu6050_cb(ret_code_t result, void * p_user_data)
 
     float Pitch_f = atanf(AccelX/hypotf(AccelY,AccelZ))*150;
     float Roll_f = atanf(AccelY/hypotf(AccelX,AccelZ))*150;
-    int16_t Pitch = (int16_t)Pitch_f;
+    int16_t Pitch = -(int16_t)Pitch_f;
     int16_t Roll = (int16_t)Roll_f;
 
 	// float Last_Angle=0, Calculated_Angle;
@@ -46,8 +46,8 @@ void read_mpu6050_cb(ret_code_t result, void * p_user_data)
 
     // sprintf(string_buffer, "AccelX: %d\r\nAccelY: %d\r\nAccelZ: %d\r\nGyroX: %d\r\nGyroY: %d\r\nGyroZ: %d\r\n\r\nPitch: %d\r\nRoll: %d\r\n\r\nCalculated Angle: %d\r\n",AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,Pitch,Roll,PrintResult);
     // App_uart_send_string(strlen(string_buffer), string_buffer);
-    sprintf(string_buffer, "Pitch: %d\tRoll: %d",Pitch, Roll);
-    App_uart_send_string(strlen(string_buffer), string_buffer);
+    // sprintf(string_buffer, "Pitch: %d\tRoll: %d",Pitch, Roll);
+    // App_uart_send_string(strlen(string_buffer), string_buffer);
 
     current_pos.x_axis = Roll;
     current_pos.y_axis = Pitch;
