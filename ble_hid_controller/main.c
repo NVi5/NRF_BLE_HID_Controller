@@ -40,13 +40,13 @@
 
 /** @file
  *
- * @defgroup ble_sdk_app_hids_mouse_main main.c
+ * @defgroup ble_sdk_app_hids_main main.c
  * @{
- * @ingroup ble_sdk_app_hids_mouse
- * @brief HID Mouse Sample Application main file.
+ * @ingroup ble_sdk_app_hids
+ * @brief HID Sample Application main file.
  *
  * This file contains is the source code for a sample application using the HID and Device
- * Information Service for implementing a simple mouse functionality. This application uses the
+ * Information Service for implementing a simple hid functionality. This application uses the
  * @ref app_scheduler.
  *
  * Also it would accept pairing requests from any peer device. This implementation of the
@@ -127,11 +127,11 @@
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
 
-#define MOVEMENT_SPEED                  1000                                        /**< Number of pixels by which the cursor is moved each time a button is pushed. */
+#define MOVEMENT_SPEED                  5                                           /**< Number of pixels by which the cursor is moved each time a button is pushed. */
 #define INPUT_REPORT_COUNT              1                                           /**< Number of input reports in this application. */
-#define INPUT_REP_WHEEL_LEN             2                                           /**< Length of Mouse Input Report containing button data. */
-#define INPUT_REP_WHEEL_INDEX           0                                           /**< Index of Mouse Input Report containing button data. */
-#define INPUT_REP_REF_WHEEL_ID          1                                           /**< Id of reference to Mouse Input Report containing button data. */
+#define INPUT_REP_PAD_LEN               4                                           /**< Length of Pad Input Report containing button data. */
+#define INPUT_REP_PAD_INDEX             0                                           /**< Index of Pad Input Report containing button data. */
+#define INPUT_REP_REF_PAD_ID            1                                           /**< Id of reference to Pad Input Report containing button data. */
 
 
 #define BASE_USB_HID_SPEC_VERSION       0x0101                                      /**< Version number of base USB HID Specification implemented by this application. */
@@ -165,6 +165,8 @@ static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_HUMAN_INTERFACE_DEVICE_SERVICE, BLE
 static pm_peer_id_t   m_whitelist_peers[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];  /**< List of peers currently in the whitelist. */
 static uint32_t       m_whitelist_peer_cnt;                                 /**< Number of peers currently in the whitelist. */
 static bool           m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
+
+static int16_t        x_axis_pos;                                           /**< Mouse position*/
 
 static void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
 
@@ -411,7 +413,7 @@ static void gap_params_init(void)
                                           strlen(DEVICE_NAME));
     APP_ERROR_CHECK(err_code);
 
-    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_HID_MOUSE);
+    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_HID_GAMEPAD);
     APP_ERROR_CHECK(err_code);
 
     memset(&gap_conn_params, 0, sizeof(gap_conn_params));
@@ -472,13 +474,17 @@ static void hids_init(void)
     0x09, 0x05,                    // USAGE (Game Pad)
     0xa1, 0x01,                    // COLLECTION (Application)
     0x85, 0x01,                    //   REPORT_ID (1)
-    0xa1, 0x00,                    //   COLLECTION (Physical)
+    0x09, 0x01,                    //   USAGE (Pointer)
+    0xa1, 0x00,                    //   COLLECTION (Physical)    
     0x05, 0x01,                    //     USAGE_PAGE (Generic Desktop)
-    0x09, 0x33,                    //     USAGE (Rx)
-    0x16, 0x00, 0x80,              //     LOGICAL_MINIMUM (-32768)
-    0x26, 0xff, 0x7f,              //     LOGICAL_MAXIMUM (32767)
-    0x75, 0x10,                    //     REPORT_SIZE (16)
-    0x95, 0x01,                    //     REPORT_COUNT (1)
+    0x09, 0x30,                    //     USAGE (X) - Left Analog Left(-ve),Right(+ve)
+    0x09, 0x31,                    //     USAGE (Y) - Left Analog Up(-ve), Down(+ve)    
+    0x09, 0x32,                    //     USAGE (Z) - Right Analog Left(-ve)Right(+ve)
+    0x09, 0x35,                    //     USAGE (Rz)- Right Analog Up(-ve), Down(+ve)
+    0x15, 0x81,                    //     LOGICAL_MINIMUM (-127)
+    0x25, 0x7f,                    //     LOGICAL_MAXIMUM (127)
+    0x75, 0x08,                    //     REPORT_SIZE (8)
+    0x95, 0x04,                    //     REPORT_COUNT (4)
     0x81, 0x02,                    //     INPUT (Data,Var,Abs)
     0xc0,                          //   END_COLLECTION
     0xc0                           // END_COLLECTION
@@ -486,9 +492,9 @@ static void hids_init(void)
 
     memset(inp_rep_array, 0, sizeof(inp_rep_array));
     // Initialize HID Service.
-    p_input_report                      = &inp_rep_array[INPUT_REP_WHEEL_INDEX];
-    p_input_report->max_len             = INPUT_REP_WHEEL_LEN;
-    p_input_report->rep_ref.report_id   = INPUT_REP_REF_WHEEL_ID;
+    p_input_report                      = &inp_rep_array[INPUT_REP_PAD_INDEX];
+    p_input_report->max_len             = INPUT_REP_PAD_LEN;
+    p_input_report->rep_ref.report_id   = INPUT_REP_REF_PAD_ID;
     p_input_report->rep_ref.report_type = BLE_HIDS_REP_TYPE_INPUT;
 
     BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&p_input_report->security_mode.cccd_write_perm);
@@ -521,13 +527,6 @@ static void hids_init(void)
     BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&hids_init_obj.rep_map.security_mode.write_perm);
     BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&hids_init_obj.hid_information.security_mode.read_perm);
     BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&hids_init_obj.hid_information.security_mode.write_perm);
-
-    BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(
-        &hids_init_obj.security_mode_boot_mouse_inp_rep.cccd_write_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(
-        &hids_init_obj.security_mode_boot_mouse_inp_rep.read_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(
-        &hids_init_obj.security_mode_boot_mouse_inp_rep.write_perm);
 
     BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&hids_init_obj.security_mode_protocol.read_perm);
     BLE_GAP_CONN_SEC_MODE_SET_ENC_NO_MITM(&hids_init_obj.security_mode_protocol.write_perm);
@@ -1015,27 +1014,27 @@ static void scheduler_init(void)
 }
 
 
-/**@brief Function for sending a Wheel Movement.
+/**@brief Function for sending a Gamepad Movement.
  *
- * @param[in]   x_axis   Wheel movement.
+ * @param[in]   x_axis
+ * @param[in]   y_axis
+ * @param[in]   z_axis
+ * @param[in]   rz_axis
  */
-static void wheel_update_send(int16_t x_axis)
+static void axis_update_send(int8_t x_axis, int8_t y_axis, int8_t z_axis, int8_t rz_axis)
 {
-    static int16_t x_axis_pos = 0;
-
     if (!m_in_boot_mode)
     {
-        uint8_t buffer[INPUT_REP_WHEEL_LEN];
-
-        APP_ERROR_CHECK_BOOL(INPUT_REP_WHEEL_LEN == 2);
-
-        x_axis_pos += x_axis;
-        buffer[0] = x_axis_pos & 0x00ff;
-        buffer[1] = x_axis_pos >> 8;
+        uint8_t buffer[INPUT_REP_PAD_LEN];
+        
+        buffer[0] = x_axis;
+        buffer[1] = y_axis;
+        buffer[2] = z_axis;
+        buffer[3] = rz_axis;
 
         uint32_t err_code = ble_hids_inp_rep_send(&m_hids,
-                                         INPUT_REP_WHEEL_INDEX,
-                                         INPUT_REP_WHEEL_LEN,
+                                         INPUT_REP_PAD_INDEX,
+                                         INPUT_REP_PAD_LEN,
                                          buffer);
 
         if ((err_code != NRF_SUCCESS) &&
@@ -1087,14 +1086,16 @@ static void bsp_event_handler(bsp_event_t event)
         case BSP_EVENT_KEY_0:
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
-                wheel_update_send(-MOVEMENT_SPEED);
+                x_axis_pos = MIN(x_axis_pos - MOVEMENT_SPEED, -127);
+                axis_update_send(x_axis_pos, 0, 0, 0);
             }
             break;
 
         case BSP_EVENT_KEY_1:
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
-                wheel_update_send(MOVEMENT_SPEED);
+                x_axis_pos = MAX(x_axis_pos + MOVEMENT_SPEED, 127);
+                axis_update_send(x_axis_pos, 0, 0, 0);
             }
             break;
 
@@ -1161,7 +1162,7 @@ int main(void)
     conn_params_init();
 
     // Start execution.
-    NRF_LOG_INFO("HID Mouse Start!\r\n");
+    NRF_LOG_INFO("HID Start!\r\n");
     timers_start();
     advertising_start();
 
