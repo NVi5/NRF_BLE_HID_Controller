@@ -4,41 +4,41 @@
 #include <string.h>
 #include "main.h"
 
-static char string_buffer[200];
+static char string_buffer[30];
 static uint8_t m_buffer[MPU6050_READ_SIZE];
 
 void read_mpu6050_cb(ret_code_t result, void * p_user_data)
 {
-    int16_t AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ;
-	float AngleX,AngleY;
-	int16_t Pitch,Roll,PrintResult;
-	float Last_Angle=0,Calculated_Angle;
-
-    AccelX 	= ((m_buffer[0]<<8) | m_buffer[1]);
-    AccelY	= ((m_buffer[2]<<8) | m_buffer[3]);
-    AccelZ 	= ((m_buffer[4]<<8) | m_buffer[5]);
-    GyroX 	= ((m_buffer[8]<<8) | m_buffer[9]);
-    GyroY 	= ((m_buffer[10]<<8) | m_buffer[11]);
-    GyroZ 	= ((m_buffer[12]<<8) | m_buffer[13]);
+    int16_t AccelX 	= ((m_buffer[0]<<8) | m_buffer[1]);
+    int16_t AccelY	= ((m_buffer[2]<<8) | m_buffer[3]);
+    int16_t AccelZ 	= ((m_buffer[4]<<8) | m_buffer[5]);
+    // int16_t GyroX 	= ((m_buffer[8]<<8) | m_buffer[9]);
+    // int16_t GyroY 	= ((m_buffer[10]<<8) | m_buffer[11]);
+    // int16_t GyroZ 	= ((m_buffer[12]<<8) | m_buffer[13]);
     AccelX >>= 5;
     AccelY >>= 5;
     AccelZ >>= 5;
-    GyroX /= 131;
-    GyroY /= 131;
-    GyroZ /= 131;
+    // GyroX /= 131;
+    // GyroY /= 131;
+    // GyroZ /= 131;
 
-    AngleX = atanf(AccelX/hypotf(AccelY,AccelZ))*57.29578;
-    AngleY = atanf(AccelY/hypotf(AccelX,AccelZ))*57.29578;
+    // float AngleX = atanf(AccelX/hypotf(AccelY,AccelZ))*57.29578;
+    // float AngleY = atanf(AccelY/hypotf(AccelX,AccelZ))*57.29578;
 
-    Pitch = (int16_t)AngleX;
-    Roll = (int16_t)AngleY;
+    float Pitch_f = atanf(AccelX/hypotf(AccelY,AccelZ))*80;
+    float Roll_f = atanf(AccelY/hypotf(AccelX,AccelZ))*80;
+    int16_t Pitch = (int16_t)Pitch_f;
+    int16_t Roll = (int16_t)Roll_f;
 
-    if(AccelZ >= 0) Calculated_Angle = 0.93*(Last_Angle-(0.065*GyroY))+ 0.07*AngleX;
-    else Calculated_Angle = 0.93*(Last_Angle+(0.065*GyroY))+ 0.07*AngleX;
-    Last_Angle = Calculated_Angle;
-    PrintResult = (int16_t)Calculated_Angle;
+	// float Last_Angle=0, Calculated_Angle;
+    // if(AccelZ >= 0) Calculated_Angle = 0.93*(Last_Angle-(0.065*GyroY))+ 0.07*AngleX;
+    // else Calculated_Angle = 0.93*(Last_Angle+(0.065*GyroY))+ 0.07*AngleX;
+    // Last_Angle = Calculated_Angle;
+    // int16_t PrintResult = (int16_t)Calculated_Angle;
 
-    sprintf(string_buffer, "AccelX: %d\r\nAccelY: %d\r\nAccelZ: %d\r\nGyroX: %d\r\nGyroY: %d\r\nGyroZ: %d\r\n\r\nPitch: %d\r\nRoll: %d\r\n\r\nCalculated Angle: %d\r\n",AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,Pitch,Roll,PrintResult);
+    // sprintf(string_buffer, "AccelX: %d\r\nAccelY: %d\r\nAccelZ: %d\r\nGyroX: %d\r\nGyroY: %d\r\nGyroZ: %d\r\n\r\nPitch: %d\r\nRoll: %d\r\n\r\nCalculated Angle: %d\r\n",AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,Pitch,Roll,PrintResult);
+    // App_uart_send_string(strlen(string_buffer), string_buffer);
+    sprintf(string_buffer, "Pitch: %d\tRoll: %d",Pitch, Roll);
     App_uart_send_string(strlen(string_buffer), string_buffer);
 }
 
