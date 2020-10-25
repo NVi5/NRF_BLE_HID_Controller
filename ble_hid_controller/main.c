@@ -129,7 +129,7 @@
 
 #define MOVEMENT_SPEED                  5                                           /**< Number of pixels by which the cursor is moved each time a button is pushed. */
 #define INPUT_REPORT_COUNT              1                                           /**< Number of input reports in this application. */
-#define INPUT_REP_PAD_LEN               4                                           /**< Length of Pad Input Report containing button data. */
+#define INPUT_REP_PAD_LEN               2                                           /**< Length of Pad Input Report containing button data. */
 #define INPUT_REP_PAD_INDEX             0                                           /**< Index of Pad Input Report containing button data. */
 #define INPUT_REP_REF_PAD_ID            1                                           /**< Id of reference to Pad Input Report containing button data. */
 
@@ -479,12 +479,10 @@ static void hids_init(void)
     0x05, 0x01,                    //     USAGE_PAGE (Generic Desktop)
     0x09, 0x30,                    //     USAGE (X) - Left Analog Left(-ve),Right(+ve)
     0x09, 0x31,                    //     USAGE (Y) - Left Analog Up(-ve), Down(+ve)    
-    0x09, 0x32,                    //     USAGE (Z) - Right Analog Left(-ve)Right(+ve)
-    0x09, 0x35,                    //     USAGE (Rz)- Right Analog Up(-ve), Down(+ve)
     0x15, 0x81,                    //     LOGICAL_MINIMUM (-127)
     0x25, 0x7f,                    //     LOGICAL_MAXIMUM (127)
     0x75, 0x08,                    //     REPORT_SIZE (8)
-    0x95, 0x04,                    //     REPORT_COUNT (4)
+    0x95, 0x02,                    //     REPORT_COUNT (2)
     0x81, 0x02,                    //     INPUT (Data,Var,Abs)
     0xc0,                          //   END_COLLECTION
     0xc0                           // END_COLLECTION
@@ -1018,10 +1016,8 @@ static void scheduler_init(void)
  *
  * @param[in]   x_axis
  * @param[in]   y_axis
- * @param[in]   z_axis
- * @param[in]   rz_axis
  */
-static void axis_update_send(int8_t x_axis, int8_t y_axis, int8_t z_axis, int8_t rz_axis)
+static void axis_update_send(int8_t x_axis, int8_t y_axis)
 {
     if (!m_in_boot_mode)
     {
@@ -1029,8 +1025,6 @@ static void axis_update_send(int8_t x_axis, int8_t y_axis, int8_t z_axis, int8_t
         
         buffer[0] = x_axis;
         buffer[1] = y_axis;
-        buffer[2] = z_axis;
-        buffer[3] = rz_axis;
 
         uint32_t err_code = ble_hids_inp_rep_send(&m_hids,
                                          INPUT_REP_PAD_INDEX,
@@ -1087,7 +1081,7 @@ static void bsp_event_handler(bsp_event_t event)
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
                 x_axis_pos = MAX(x_axis_pos - MOVEMENT_SPEED, -127);
-                axis_update_send(x_axis_pos, 0, 0, 0);
+                axis_update_send(x_axis_pos, 0);
             }
             break;
 
@@ -1095,7 +1089,7 @@ static void bsp_event_handler(bsp_event_t event)
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
                 x_axis_pos = MIN(x_axis_pos + MOVEMENT_SPEED, 127);
-                axis_update_send(x_axis_pos, 0, 0, 0);
+                axis_update_send(x_axis_pos, 0);
             }
             break;
 
