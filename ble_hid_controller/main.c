@@ -1086,7 +1086,7 @@ static void bsp_event_handler(bsp_event_t event)
         case BSP_EVENT_KEY_0:
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
-                x_axis_pos = MIN(x_axis_pos - MOVEMENT_SPEED, -127);
+                x_axis_pos = MAX(x_axis_pos - MOVEMENT_SPEED, -127);
                 axis_update_send(x_axis_pos, 0, 0, 0);
             }
             break;
@@ -1094,7 +1094,7 @@ static void bsp_event_handler(bsp_event_t event)
         case BSP_EVENT_KEY_1:
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
             {
-                x_axis_pos = MAX(x_axis_pos + MOVEMENT_SPEED, 127);
+                x_axis_pos = MIN(x_axis_pos + MOVEMENT_SPEED, 127);
                 axis_update_send(x_axis_pos, 0, 0, 0);
             }
             break;
