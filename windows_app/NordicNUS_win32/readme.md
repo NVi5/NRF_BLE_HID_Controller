@@ -1,1 +1,1 @@
-Most of the code is dervied from MSDN community and winAPI programming reference.
+Most of the code is derived from MSDN community and winAPI programming reference.
