@@ -28,6 +28,10 @@
   - Visual Studio 2019
   - Visual Studio C++ development tools
   - Windows Driver Kit 8+
+  
+## Docs:
+* [Konspekt](docs/Konspekt.pdf)   
+* Raport - #TODO
 
 ## Movie:
 
