@@ -138,7 +138,7 @@
 
 #define MOVEMENT_SPEED                  5                                           /**< Number of pixels by which the cursor is moved each time a button is pushed. */
 #define INPUT_REPORT_COUNT              1                                           /**< Number of input reports in this application. */
-#define INPUT_REP_PAD_LEN               2                                           /**< Length of Pad Input Report containing button data. */
+#define INPUT_REP_PAD_LEN               3                                           /**< Length of Pad Input Report containing button data. */
 #define INPUT_REP_PAD_INDEX             0                                           /**< Index of Pad Input Report containing button data. */
 #define INPUT_REP_REF_PAD_ID            1                                           /**< Id of reference to Pad Input Report containing button data. */
 
@@ -567,6 +567,17 @@ static void hids_init(void)
     0x95, 0x02,                    //     REPORT_COUNT (2)
     0x81, 0x02,                    //     INPUT (Data,Var,Abs)
     0xc0,                          //   END_COLLECTION
+    0x05, 0x09,                    //   USAGE_PAGE (Button)
+    0x19, 0x00,                    //   USAGE_MINIMUM (Button 0)
+    0x29, 0x01,                    //   USAGE_MAXIMUM (Button 1)
+    0x15, 0x00,                    //   LOGICAL_MINIMUM (0)
+    0x25, 0x01,                    //   LOGICAL_MAXIMUM (1)
+    0x95, 0x02,                    //   REPORT_COUNT (2)
+    0x75, 0x01,                    //   REPORT_SIZE (1)
+    0x81, 0x02,                    //   INPUT (Data,Var,Abs)
+    0x95, 0x01,                    //   REPORT_COUNT (1)
+    0x75, 0x06,                    //   REPORT_SIZE (6)
+    0x81, 0x43,                    //   INPUT (Cnst,Var,Abs,Null)
     0xc0                           // END_COLLECTION
     };
 
@@ -1132,6 +1143,7 @@ static void hid_update_send(int8_t x_axis, int8_t y_axis)
         
         buffer[0] = x_axis;
         buffer[1] = y_axis;
+        buffer[2] = app_button_is_pushed(0) | (app_button_is_pushed(1) << 1);
 
         uint32_t err_code = ble_hids_inp_rep_send(&m_hids,
                                          INPUT_REP_PAD_INDEX,
@@ -1187,16 +1199,12 @@ static void bsp_event_handler(bsp_event_t event)
         // case BSP_EVENT_KEY_0:
         //     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
         //     {
-        //         x_axis_pos = MAX(x_axis_pos - MOVEMENT_SPEED, -127);
-        //         hid_update_send(x_axis_pos, 0);
         //     }
         //     break;
 
         // case BSP_EVENT_KEY_1:
         //     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
         //     {
-        //         x_axis_pos = MIN(x_axis_pos + MOVEMENT_SPEED, 127);
-        //         hid_update_send(x_axis_pos, 0);
         //     }
         //     break;
 
