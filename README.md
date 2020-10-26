@@ -7,6 +7,7 @@
   - Waveshare Bluetooth 4.0 NRF51822 Eval Kit
   - J-Link programmer
   - MPU6050 accelerometer module
+  - HD44780 LCD
   - BLE compatible Windows PC
  
 #### Software:
