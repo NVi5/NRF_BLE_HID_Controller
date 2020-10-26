@@ -16,4 +16,4 @@ while(nus.OpenBleNusHandle() == -1):
 while(True):
     text = f"{lib.xgetSpeed():3.0f}KMH  {lib.xgetRpm():5.0f}RPM"
     nus.SendNusMessage(ctypes.c_char_p(text.encode('utf-8')), 16)
-    time.sleep(0.033)
+    time.sleep(0.2)
