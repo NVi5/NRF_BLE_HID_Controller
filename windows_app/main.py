@@ -14,6 +14,6 @@ while(nus.OpenBleNusHandle() == -1):
     print("Trying to connect...")
     time.sleep(0.5)
 while(True):
-    xd = "{:3.0f}".format(lib.xgetSpeed()) + "{:5.0f}".format(lib.xgetRpm())
-    nus.SendNusMessage(ctypes.c_char_p(xd.encode('utf-8')), 3+1+5)
+    text = f"{lib.xgetSpeed():3.0f}KMH  {lib.xgetRpm():5.0f}RPM"
+    nus.SendNusMessage(ctypes.c_char_p(text.encode('utf-8')), 16)
     time.sleep(0.033)
