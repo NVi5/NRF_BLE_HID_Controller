@@ -83,6 +83,7 @@
 #include "app_uart.h"
 #include "nrf_twi.h"
 #include "mpu6050.h"
+#include "hd44780.h"
 
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
@@ -492,9 +493,11 @@ static void gap_params_init(void)
  * @param[in] length   Length of the data.
  */
 /**@snippet [Handling the data received over BLE] */
+char nus_data[20];
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
     App_uart_send_string(length, (char *)p_data);
+    memcpy(nus_data, p_data, 20);
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -1381,12 +1384,17 @@ int main(void)
     NRF_LOG_INFO("HID Start!\r\n");
     timers_start();
     advertising_start();
+    lcd_init();
+    lcd_enable_4bit_mode(true, false);
+    lcd_on_off_control(true, false, false);
+    lcd_clear_display();
     Init_mpu6050();
 
     // Enter main loop.
     for (;;)
     {
         app_sched_execute();
+        lcd_write_string(nus_data, 0, 0);
         if (NRF_LOG_PROCESS() == false)
         {
             power_manage();
