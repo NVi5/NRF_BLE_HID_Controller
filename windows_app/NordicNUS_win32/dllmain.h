@@ -4,5 +4,5 @@
 
 extern "C" {
 	NUS_EXPORT int OpenBleNusHandle();
-	NUS_EXPORT void SendNusMessage(char* message, unsigned int len);
+	NUS_EXPORT int SendNusMessage(char* message, unsigned int len);
 }

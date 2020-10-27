@@ -17,7 +17,7 @@
 #define NUS_TX_CHARACTERISTIC_SHORT_UUID 0x0002
 
 HANDLE nusDeviceHandle = NULL;
-PBTH_LE_GATT_CHARACTERISTIC nusTxCharacteristic;
+PBTH_LE_GATT_CHARACTERISTIC nusTxCharacteristic = NULL;
 
 HANDLE GetBLEHandle(__in GUID AGuid)
 {
@@ -28,7 +28,6 @@ HANDLE GetBLEHandle(__in GUID AGuid)
 	HANDLE hComm = NULL;
 
 	hDI = SetupDiGetClassDevs(&BluetoothInterfaceGUID, NULL, NULL, DIGCF_DEVICEINTERFACE | DIGCF_PRESENT);
-
 	if (hDI == INVALID_HANDLE_VALUE) return NULL;
 
 	did.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
@@ -52,17 +51,18 @@ HANDLE GetBLEHandle(__in GUID AGuid)
 
 			pInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
-			if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, pInterfaceDetailData, size, &size, &dd))
-				break;
+			if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, pInterfaceDetailData, size, &size, &dd)) break;
 
-			hComm = CreateFile(
-				pInterfaceDetailData->DevicePath,
-				GENERIC_WRITE | GENERIC_READ,
-				FILE_SHARE_READ | FILE_SHARE_WRITE,
-				NULL,
-				OPEN_EXISTING,
-				0,
-				NULL);
+			DEVPROPTYPE ulPropertyType;
+			DWORD dwSize;
+			ULONG devst;
+			DEVPROPKEY dev_property;
+			dev_property.fmtid = BluetoothInterfaceGUID;
+			
+			SetupDiGetDeviceProperty(hDI, &dd, &dev_property, &ulPropertyType, (BYTE*)&devst, sizeof(devst), &dwSize, 0);
+			if (devst & 0x02000000) return NULL; //device not connected
+
+			hComm = CreateFile(pInterfaceDetailData->DevicePath, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
 			GlobalFree(pInterfaceDetailData);
 		}
@@ -164,7 +164,9 @@ NUS_EXPORT int OpenBleNusHandle() {
 	return -1;
 }
 
-NUS_EXPORT void SendNusMessage(char* message, unsigned int len) {
-	if (nusDeviceHandle == NULL) return;
+NUS_EXPORT int SendNusMessage(char* message, unsigned int len) {
+	if (nusDeviceHandle == NULL) return -1;
+	if (nusTxCharacteristic == NULL) return -1;
 	writeChar((unsigned char*)message, len, nusDeviceHandle, nusTxCharacteristic);
+	return 0;
 }
