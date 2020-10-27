@@ -10,14 +10,60 @@
 #include <bthdef.h>
 #include <combaseapi.h>
 #include <Bluetoothleapis.h>
+#include <initguid.h>
+#include <devpkey.h>
+#include <devpropdef.h>
 #pragma comment(lib, "SetupAPI")
 #pragma comment(lib, "BluetoothApis.lib")
 
 #define TO_SEARCH_DEVICE_UUID "{6E400001-B5A3-F393-E0A9-E50E24DCCA9E}"
 #define NUS_TX_CHARACTERISTIC_SHORT_UUID 0x0002
 
+#define WINDOWS_BLUETOOTH_CLASS_GUID "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}"
+#define WINDOWS_DEVICE_FRIENDLY_NAME L"NFS_Controller"
+
 HANDLE nusDeviceHandle = NULL;
 PBTH_LE_GATT_CHARACTERISTIC nusTxCharacteristic = NULL;
+
+int GetControllerStatus(__in GUID AGuid) {
+
+	HDEVINFO hDI;
+	GUID BluetoothInterfaceGUID = AGuid;
+	SP_DEVICE_INTERFACE_DATA did;
+	SP_DEVINFO_DATA dd;
+	DWORD size = 0;
+
+	hDI = SetupDiGetClassDevs(&BluetoothInterfaceGUID, NULL, NULL, DIGCF_PRESENT);
+	if (hDI == INVALID_HANDLE_VALUE) return -1;
+
+	dd.cbSize = sizeof(SP_DEVINFO_DATA);
+	did.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+	DWORD index = 0;
+
+	while (SetupDiEnumDeviceInfo(hDI, index, &dd) == TRUE) {
+
+		DEVPROPTYPE ulPropertyType;
+		DWORD dwSize;
+		ULONG devst = 0;
+
+		SetupDiGetDeviceProperty(hDI, &dd, &DEVPKEY_NAME, &ulPropertyType, NULL, 0, &dwSize, 0);
+		wchar_t* dev_name;
+		dev_name = (wchar_t*)malloc(dwSize);
+		SetupDiGetDeviceProperty(hDI, &dd, &DEVPKEY_NAME, &ulPropertyType, (PBYTE)dev_name, dwSize, NULL, 0);
+		if (wcscmp(WINDOWS_DEVICE_FRIENDLY_NAME, (const wchar_t*)dev_name) == 0) {
+			free(dev_name);
+			SetupDiGetDeviceProperty(hDI, &dd, &DEVPKEY_Device_DevNodeStatus, &ulPropertyType, (BYTE*)&devst, sizeof(devst), &dwSize, 0);
+			if (devst & 0x2000000) return -1;
+			else return 0;
+		}
+		else {
+			free(dev_name);
+		}
+		index++;
+	}
+
+	return -1;
+}
 
 HANDLE GetBLEHandle(__in GUID AGuid)
 {
@@ -44,11 +90,9 @@ HANDLE GetBLEHandle(__in GUID AGuid)
 		if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, NULL, 0, &size, 0))
 		{
 			int err = GetLastError();
-
 			if (err == ERROR_NO_MORE_ITEMS) break;
 
 			PSP_DEVICE_INTERFACE_DETAIL_DATA pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)GlobalAlloc(GPTR, size);
-
 			pInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
 			if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, pInterfaceDetailData, size, &size, &dd)) break;
@@ -67,45 +111,33 @@ void writeChar(unsigned char* data, unsigned long length, HANDLE hDevice, PBTH_L
 {
 	BTH_LE_GATT_RELIABLE_WRITE_CONTEXT relialeWriteContext = NULL;
 
-	HRESULT hr = BluetoothGATTBeginReliableWrite(
-		hDevice,
-		&relialeWriteContext,
-		BLUETOOTH_GATT_FLAG_NONE);
+	HRESULT hr = BluetoothGATTBeginReliableWrite(hDevice, &relialeWriteContext, BLUETOOTH_GATT_FLAG_NONE);
 
-	PBTH_LE_GATT_CHARACTERISTIC_VALUE newValue = (PBTH_LE_GATT_CHARACTERISTIC_VALUE)malloc(
-		sizeof(BTH_LE_GATT_CHARACTERISTIC_VALUE) + length);
+	PBTH_LE_GATT_CHARACTERISTIC_VALUE newValue = (PBTH_LE_GATT_CHARACTERISTIC_VALUE)malloc(sizeof(BTH_LE_GATT_CHARACTERISTIC_VALUE) + length);
 
 	if (SUCCEEDED(hr))
 	{
-
 		memset(newValue, 0, sizeof(BTH_LE_GATT_CHARACTERISTIC_VALUE) + length);
-
 		newValue->DataSize = (ULONG)length;
-
 		memcpy(newValue->Data, data, length);
-
-		hr = BluetoothGATTSetCharacteristicValue(
-			hDevice,
-			parentCharacteristic,
-			newValue,
-			NULL,
-			BLUETOOTH_GATT_FLAG_NONE);
+		hr = BluetoothGATTSetCharacteristicValue( hDevice, parentCharacteristic, newValue, NULL, BLUETOOTH_GATT_FLAG_NONE);
 	}
 
 	if (NULL != relialeWriteContext)
 	{
-		BluetoothGATTEndReliableWrite(
-			hDevice,
-			relialeWriteContext,
-			BLUETOOTH_GATT_FLAG_NONE);
+		BluetoothGATTEndReliableWrite(hDevice, relialeWriteContext, BLUETOOTH_GATT_FLAG_NONE);
 	}
 
 	free(newValue);
-
 }
 
 NUS_EXPORT int OpenBleNusHandle() {
+
 	GUID AGuid;
+
+	CLSIDFromString(TEXT(WINDOWS_BLUETOOTH_CLASS_GUID), &AGuid);
+	if (GetControllerStatus(AGuid)) return -1;
+
 	CLSIDFromString(TEXT(TO_SEARCH_DEVICE_UUID), &AGuid);
 	HANDLE hLEDevice = GetBLEHandle(AGuid);
 	if (hLEDevice == NULL) return -1;
