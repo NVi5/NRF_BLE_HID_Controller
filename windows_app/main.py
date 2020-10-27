@@ -6,7 +6,7 @@ lib.xOpenProcess(ctypes.c_char_p("Need for Speed".encode('utf-8')))
 lib.xgetSpeed.restype = ctypes.c_float
 lib.xgetRpm.restype = ctypes.c_float
 
-nus = ctypes.cdll.LoadLibrary('./NordicNUS_win32/Release/NordicNUS_win32.dll')
+nus = ctypes.cdll.LoadLibrary('./NordicNUS_win32.dll')
 nus.OpenBleNusHandle.restype = ctypes.c_int
 nus.SendNusMessage.argtypes = [ctypes.c_char_p, ctypes.c_uint32]
 
