@@ -2,7 +2,8 @@ import ctypes
 import time
 
 lib = ctypes.cdll.LoadLibrary('./Dll2.dll')
-lib.xOpenProcess(ctypes.c_char_p("Need for Speed".encode('utf-8')))
+while(lib.xOpenProcess("NFSC.exe") == -1):
+    time.sleep(0.5)
 lib.xgetSpeed.restype = ctypes.c_float
 lib.xgetRpm.restype = ctypes.c_float
 
