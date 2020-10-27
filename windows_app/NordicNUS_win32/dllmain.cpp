@@ -53,15 +53,17 @@ int GetControllerStatus(__in GUID AGuid) {
 		if (wcscmp(WINDOWS_DEVICE_FRIENDLY_NAME, (const wchar_t*)dev_name) == 0) {
 			free(dev_name);
 			SetupDiGetDeviceProperty(hDI, &dd, &DEVPKEY_Device_DevNodeStatus, &ulPropertyType, (BYTE*)&devst, sizeof(devst), &dwSize, 0);
+			SetupDiDestroyDeviceInfoList(hDI);
 			if (devst & 0x2000000) return -1;
 			else return 0;
+			return -1;
 		}
 		else {
 			free(dev_name);
 		}
 		index++;
 	}
-
+	SetupDiDestroyDeviceInfoList(hDI);
 	return -1;
 }
 
@@ -95,7 +97,10 @@ HANDLE GetBLEHandle(__in GUID AGuid)
 			PSP_DEVICE_INTERFACE_DETAIL_DATA pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)GlobalAlloc(GPTR, size);
 			pInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
-			if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, pInterfaceDetailData, size, &size, &dd)) break;
+			if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, pInterfaceDetailData, size, &size, &dd)) {
+				GlobalFree(pInterfaceDetailData);
+				break;
+			}
 
 			hComm = CreateFile(pInterfaceDetailData->DevicePath, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
@@ -122,10 +127,18 @@ void writeChar(unsigned char* data, unsigned long length, HANDLE hDevice, PBTH_L
 		memcpy(newValue->Data, data, length);
 		hr = BluetoothGATTSetCharacteristicValue( hDevice, parentCharacteristic, newValue, NULL, BLUETOOTH_GATT_FLAG_NONE);
 	}
+	else {
+		free(newValue);
+		return;
+	}
 
 	if (NULL != relialeWriteContext)
 	{
 		BluetoothGATTEndReliableWrite(hDevice, relialeWriteContext, BLUETOOTH_GATT_FLAG_NONE);
+	}
+	else {
+		free(newValue);
+		return;
 	}
 
 	free(newValue);
@@ -154,7 +167,10 @@ NUS_EXPORT int OpenBleNusHandle() {
 
 	USHORT numServices;
 	hr = BluetoothGATTGetServices(hLEDevice, serviceBufferCount, pServiceBuffer, &numServices, BLUETOOTH_GATT_FLAG_NONE);
-	if (S_OK != hr) return -1;
+	if (S_OK != hr) {
+		free(pServiceBuffer);
+		return - 1;
+	}
 
 	USHORT charBufferSize;
 	hr = BluetoothGATTGetCharacteristics(hLEDevice, pServiceBuffer, 0, NULL, &charBufferSize, BLUETOOTH_GATT_FLAG_NONE);
@@ -170,8 +186,11 @@ NUS_EXPORT int OpenBleNusHandle() {
 
 		USHORT numChars;
 		hr = BluetoothGATTGetCharacteristics(hLEDevice, pServiceBuffer, charBufferSize, pCharBuffer, &numChars, BLUETOOTH_GATT_FLAG_NONE);
-		if (S_OK != hr) return -1;
-		if (numChars != charBufferSize) return -1;
+		if ((S_OK != hr) || (numChars != charBufferSize)) {
+			free(pServiceBuffer);
+			free(pCharBuffer);
+			return -1;
+		}
 	}
 
 	PBTH_LE_GATT_CHARACTERISTIC currGattChar;
