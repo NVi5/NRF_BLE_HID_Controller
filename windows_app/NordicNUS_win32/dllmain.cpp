@@ -53,15 +53,6 @@ HANDLE GetBLEHandle(__in GUID AGuid)
 
 			if (!SetupDiGetDeviceInterfaceDetail(hDI, &did, pInterfaceDetailData, size, &size, &dd)) break;
 
-			DEVPROPTYPE ulPropertyType;
-			DWORD dwSize;
-			ULONG devst;
-			DEVPROPKEY dev_property;
-			dev_property.fmtid = BluetoothInterfaceGUID;
-			
-			SetupDiGetDeviceProperty(hDI, &dd, &dev_property, &ulPropertyType, (BYTE*)&devst, sizeof(devst), &dwSize, 0);
-			if (devst & 0x02000000) return NULL; //device not connected
-
 			hComm = CreateFile(pInterfaceDetailData->DevicePath, GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
 			GlobalFree(pInterfaceDetailData);
