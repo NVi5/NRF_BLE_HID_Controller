@@ -12,7 +12,7 @@
  
 #### Software:
   - Windows 8+
-  - Python 3 32-bit or LabVIEW 2018+
+  - Python 3 32-bit
   - J-link programmer software
   
 ## Development requirements:
