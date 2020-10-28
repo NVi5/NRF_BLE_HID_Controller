@@ -33,9 +33,10 @@
 * [Konspekt](docs/Konspekt.pdf)   
 * Raport - #TODO
 
-## Movie:
+## Movies:
+![Displaying data via NRF NUS](https://drive.google.com/file/d/1ZSBEZ3vOoPJ-9Qd31olColGx2e2wvz5t/view?usp=sharing)
 
-#TODO
+![HID controller](https://drive.google.com/file/d/1ZX7S0JApt6oSfFwU_3es2JuZik6sGuro/view?usp=sharing)
 
 ## Images:
 
