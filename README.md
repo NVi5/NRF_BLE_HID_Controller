@@ -30,8 +30,8 @@
   - Windows Driver Kit 8+
   
 ## Docs:
-* [Konspekt](docs/Konspekt.pdf)   
-* Raport - #TODO
+* [Konspekt](docs/Konspekt.pdf)
+* [Raport](docs/Raport.pdf)
 
 ## Movies:
 [Displaying data via NRF NUS](https://drive.google.com/file/d/1ZSBEZ3vOoPJ-9Qd31olColGx2e2wvz5t/view?usp=sharing)
